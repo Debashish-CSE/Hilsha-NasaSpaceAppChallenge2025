@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, ChevronDown, ChevronUp, MapPin, Building2, Shield, Flame, Users, TrendingUp, School, Trees, Activity, AlertCircle } from 'lucide-react';
+import Papa from 'papaparse';
 
 function InfoContainer({ regionInfo, onClose }) {
     const [isExpanded, setIsExpanded] = useState(true);
@@ -21,7 +22,56 @@ function InfoContainer({ regionInfo, onClose }) {
         const area = (latDiff * 111) * (lngDiff * 111);
         return area.toFixed(2);
     };
-    //OpenStreetMap Overpass API
+    
+    const fetchPopulationData = async (bbox) => {
+        try {
+            const [minLat, minLng, maxLat, maxLng] = bbox.split(',').map(Number);
+            const response = await fetch('/data/bgd_pd_2020_1km_UNadj_ASCII_XYZ/bgd_pd_2020_1km_UNadj_ASCII_XYZ.csv');
+            const csvText = await response.text();
+            
+            Papa.parse(csvText, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    let totalPopulation = 0;
+                    let gridCellCount = 0;
+                    results.data.forEach(row => {
+                        const lng = row.X;
+                        const lat = row.Y;
+                        const population = row.Z;
+                        if (lng >= minLng && lng <= maxLng && lat >= minLat && lat <= maxLat) {
+                            totalPopulation += population;
+                            gridCellCount++;
+                        }
+                    });
+                    
+                    console.log(`Found ${gridCellCount} grid cells with total population: ${totalPopulation}`);
+                    const growthRate = 2.5;
+                    const yearsSince2020 = new Date().getFullYear() - 2020;
+                    const currentPopulation = Math.round(totalPopulation * Math.pow(1 + growthRate/100, yearsSince2020));
+                    
+                    setPopulationData({
+                        current: currentPopulation,
+                        growthRate: growthRate,
+                        projected5Year: Math.round(currentPopulation * Math.pow(1 + growthRate/100, 5)),
+                        projected10Year: Math.round(currentPopulation * Math.pow(1 + growthRate/100, 10)),
+                        baseYear: 2020,
+                        gridCells: gridCellCount,
+                        source: 'NASA WorldPop Bangladesh 2020'
+                    });
+                },
+                error: (error) => {
+                    console.error('Error parsing population CSV:', error);
+                    setPopulationData(null);
+                }
+            });
+        } catch (error) {
+            console.error('Error fetching population data:', error);
+            setPopulationData(null);
+        }
+    };
+    
     useEffect(() => {
         if (!regionInfo || !regionInfo.bounds || !Array.isArray(regionInfo.bounds)) return;
         const fetchAmenities = async () => {
@@ -86,18 +136,8 @@ function InfoContainer({ regionInfo, onClose }) {
 
                 console.log('Amenity counts:', counts);
                 setAmenities(counts);
-                const area = parseFloat(calculateArea());
-                if (!isNaN(area) && area > 0) {
-                    const estimatedPopulation = Math.round(area * 2500);
-                    const growthRate = 2.5; //urban growth rate %
-                    
-                    setPopulationData({
-                        current: estimatedPopulation,
-                        growthRate: growthRate,
-                        projected5Year: Math.round(estimatedPopulation * Math.pow(1 + growthRate/100, 5)),
-                        projected10Year: Math.round(estimatedPopulation * Math.pow(1 + growthRate/100, 10))
-                    });
-                }
+                await fetchPopulationData(bbox);
+
 
             } catch (error) {
                 console.error('Error fetching amenities:', error);
@@ -485,7 +525,7 @@ function InfoContainer({ regionInfo, onClose }) {
                                                         className="font-medium text-blue-900" 
                                                         style={{ fontSize: '11px', letterSpacing: '0.2px' }}
                                                     >
-                                                        Area-based Model
+                                                        NASA WorldPop 2020 Data
                                                     </span>
                                                 </div>
                                             </div>
@@ -497,7 +537,11 @@ function InfoContainer({ regionInfo, onClose }) {
                                                     marginBottom: '16px' 
                                                 }}
                                             >
-                                                Estimated using <strong>2,500 people/km²</strong> urban density with <strong>2.5% annual growth</strong> (UN methodology)
+                                                {populationData.source ? (
+                                                    <>Satellite-derived data from <strong>{populationData.gridCells} grid cells</strong> at 1km resolution. Adjusted for <strong>{new Date().getFullYear() - populationData.baseYear} years</strong> of growth at <strong>2.5% annually</strong>.</>
+                                                ) : (
+                                                    <>Estimated using <strong>2,500 people/km²</strong> urban density with <strong>2.5% annual growth</strong> (UN methodology)</>
+                                                )}
                                             </p>
                                             <div 
                                                 className="grid grid-cols-1 md:grid-cols-3" 
@@ -529,7 +573,7 @@ function InfoContainer({ regionInfo, onClose }) {
                                                         className="text-blue-700" 
                                                         style={{ fontSize: '11px', lineHeight: '16px' }}
                                                     >
-                                                        Based on {calculateArea()} km² area
+                                                        {populationData.source ? `${populationData.gridCells} grid cells • ${populationData.baseYear} base year` : `Based on ${calculateArea()} km² area`}
                                                     </p>
                                                 </div>
                                                 <div 

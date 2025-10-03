@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MapContainer, TileLayer, Rectangle, useMapEvents, Marker, Popup, useMap } from 'react-leaflet';
 import { OpenStreetMapProvider } from 'leaflet-geosearch';
+import { Info, Minus } from 'lucide-react';
 import L from 'leaflet';
 import Navbar from './Navbar';
 import InfoContainer from './InfoContainer';
@@ -85,16 +86,70 @@ function DrawRectangle({ onRegionSelect, isEnabled }) {
   return null;
 }
 
+function ScaleControl({ onScaleUpdate }) {
+  const map = useMap();
+  const [scale, setScale] = useState({ distance: 0, unit: 'km' });
+
+  useEffect(() => {
+    const updateScale = () => {
+      const zoom = map.getZoom();
+      const center = map.getCenter();
+      const metersPerPixel = 156543.04 * Math.cos(center.lat * Math.PI / 180) / Math.pow(2, zoom);
+      const scaleWidthPixels = 100;
+      const distanceMeters = metersPerPixel * scaleWidthPixels;
+      let distance, unit, actualWidth;
+      if (distanceMeters >= 1000) {
+        distance = distanceMeters / 1000;
+        unit = 'km';
+        if (distance >= 100) {
+          distance = Math.round(distance / 100) * 100;
+        } else if (distance >= 10) {
+          distance = Math.round(distance / 10) * 10;
+        } else if (distance >= 1) {
+          distance = Math.round(distance);
+        } else {
+          distance = Math.round(distance * 10) / 10;
+        }
+        actualWidth = (distance * 1000 / distanceMeters) * scaleWidthPixels;
+      } else {
+        distance = distanceMeters;
+        unit = 'm';
+        if (distance >= 100) {
+          distance = Math.round(distance / 100) * 100;
+        } else if (distance >= 10) {
+          distance = Math.round(distance / 10) * 10;
+        } else {
+          distance = Math.round(distance);
+        }
+        actualWidth = (distance / distanceMeters) * scaleWidthPixels;
+      }
+      setScale({ distance, unit, width: actualWidth });
+      if (onScaleUpdate) onScaleUpdate({ distance, unit, width: actualWidth });
+    };
+
+    updateScale();
+    map.on('zoom', updateScale);
+    map.on('move', updateScale);
+    return () => {
+      map.off('zoom', updateScale);
+      map.off('move', updateScale);
+    };
+  }, [map, onScaleUpdate]);
+
+  return null;
+}
+
 const MapComponent = () => {
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [regionInfo, setRegionInfo] = useState(null);
   const [isDrawMode, setIsDrawMode] = useState(false);
   const [searchedLocation, setSearchedLocation] = useState(null);
+  const [showVersionInfo, setShowVersionInfo] = useState(false);
+  const [mapScale, setMapScale] = useState({ distance: 0, unit: 'km', width: 100 });
   const mapRef = useRef(null);
   const defaultCenter = [23.8103, 90.4125];
   const defaultZoom = 13;
   const provider = new OpenStreetMapProvider();
-
   const handleSearch = async (query) => {
     try {
       const results = await provider.search({ query });
@@ -214,7 +269,267 @@ const MapComponent = () => {
             </Popup>
           </Marker>
         )}
+        <ScaleControl onScaleUpdate={setMapScale} />
       </MapContainer>
+      
+      <div 
+        className="fixed top-4 left-4 z-[9999] pointer-events-auto"
+        style={{ 
+          transition: 'all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)'
+        }}
+      >
+        {!showVersionInfo ? (
+          <button
+            onClick={() => setShowVersionInfo(true)}
+            className="bg-white rounded-full shadow-md hover:shadow-lg transition-all duration-200"
+            style={{ 
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none'
+            }}
+            title="Version Info"
+          >
+            <Info className="text-blue-600" style={{ width: '20px', height: '20px' }} strokeWidth={2} />
+          </button>
+        ) : (
+          <div
+            className="bg-white rounded-2xl shadow-lg"
+            style={{ 
+              width: '320px',
+              animation: 'slideInLeft 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)',
+              border: '1px solid rgba(0, 0, 0, 0.1)'
+            }}
+          >
+            <div 
+              className="flex items-center justify-between"
+              style={{ 
+                padding: '16px 20px',
+                borderBottom: '1px solid #e5e7eb'
+              }}
+            >
+              <div className="flex items-center" style={{ gap: '12px' }}>
+                <div 
+                  className="bg-blue-50 rounded-full flex items-center justify-center"
+                  style={{ width: '32px', height: '32px' }}
+                >
+                  <Info className="text-blue-600" style={{ width: '18px', height: '18px' }} strokeWidth={2} />
+                </div>
+                <h4 
+                  className="font-semibold text-gray-900" 
+                  style={{ 
+                    fontSize: '14px', 
+                    lineHeight: '20px',
+                    letterSpacing: '-0.01em'
+                  }}
+                >
+                  Base Version 1.0
+                </h4>
+              </div>
+              <button
+                onClick={() => setShowVersionInfo(false)}
+                className="hover:bg-gray-100 rounded-full transition-all duration-200"
+                style={{ 
+                  width: '28px',
+                  height: '28px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: 'none',
+                  background: 'transparent'
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M1 1L13 13M13 1L1 13" stroke="#6B7280" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+
+            <div style={{ padding: '16px 20px' }}>
+              <p 
+                className="text-gray-600" 
+                style={{ 
+                  fontSize: '13px', 
+                  lineHeight: '20px',
+                  marginBottom: '16px'
+                }}
+              >
+                NASA satellite data available for <strong className="text-gray-900">Bangladesh region</strong> only.
+              </p>
+              <div style={{ marginBottom: '16px' }}>
+                <h5 
+                  className="text-gray-900 font-medium" 
+                  style={{ 
+                    fontSize: '12px', 
+                    marginBottom: '10px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}
+                >
+                  Data Sources
+                </h5>
+                <div className="space-y-2">
+                  <div 
+                    className="flex items-start"
+                    style={{ gap: '8px' }}
+                  >
+                    <div 
+                      className="rounded-full bg-blue-100"
+                      style={{ 
+                        width: '6px', 
+                        height: '6px', 
+                        marginTop: '6px',
+                        flexShrink: 0
+                      }}
+                    />
+                    <p 
+                      className="text-gray-700" 
+                      style={{ fontSize: '12px', lineHeight: '18px' }}
+                    >
+                      <strong>WorldPop 2020</strong> - 1km population density
+                    </p>
+                  </div>
+                  <div 
+                    className="flex items-start"
+                    style={{ gap: '8px' }}
+                  >
+                    <div 
+                      className="rounded-full bg-blue-100"
+                      style={{ 
+                        width: '6px', 
+                        height: '6px', 
+                        marginTop: '6px',
+                        flexShrink: 0
+                      }}
+                    />
+                    <p 
+                      className="text-gray-700" 
+                      style={{ fontSize: '12px', lineHeight: '18px' }}
+                    >
+                      <strong>OpenStreetMap</strong> - Infrastructure data
+                    </p>
+                  </div>
+                  <div 
+                    className="flex items-start"
+                    style={{ gap: '8px' }}
+                  >
+                    <div 
+                      className="rounded-full bg-blue-100"
+                      style={{ 
+                        width: '6px', 
+                        height: '6px', 
+                        marginTop: '6px',
+                        flexShrink: 0
+                      }}
+                    />
+                    <p 
+                      className="text-gray-700" 
+                      style={{ fontSize: '12px', lineHeight: '18px' }}
+                    >
+                      <strong>Growth Model</strong> - 2.5% annual rate
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div 
+                className="bg-blue-50 rounded-lg"
+                style={{ padding: '12px' }}
+              >
+                <p 
+                  className="text-blue-900" 
+                  style={{ 
+                    fontSize: '11px', 
+                    lineHeight: '16px',
+                    fontWeight: 500
+                  }}
+                >
+                  <span style={{ fontSize: '13px', marginRight: '4px' }}>ℹ️</span>
+                  Draw regions within Bangladesh for accurate analysis
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <style>
+        {`
+          @keyframes slideInLeft {
+            from {
+              opacity: 0;
+              transform: translateX(-10px) scale(0.95);
+            }
+            to {
+              opacity: 1;
+              transform: translateX(0) scale(1);
+            }
+          }
+        `}
+      </style>
+      
+      <div 
+        className="fixed z-[9999] pointer-events-none"
+        style={{ 
+          bottom: 'clamp(16px, 3vw, 24px)',
+          left: 'clamp(16px, 3vw, 24px)'
+        }}
+      >
+        <div 
+          className="bg-white rounded-lg shadow-md"
+          style={{ 
+            padding: 'clamp(6px, 1.5vw, 8px) clamp(10px, 2vw, 12px)',
+            border: '1px solid rgba(0, 0, 0, 0.1)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(6px, 1.5vw, 8px)' }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <div 
+                style={{ 
+                  width: `${Math.max(60, Math.min(mapScale.width, 120))}px`,
+                  height: '3px',
+                  background: '#1f2937',
+                  position: 'relative'
+                }}
+              >
+                <div 
+                  style={{ 
+                    position: 'absolute',
+                    left: 0,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: '2px',
+                    height: '9px',
+                    background: '#1f2937'
+                  }}
+                />
+                <div 
+                  style={{ 
+                    position: 'absolute',
+                    right: 0,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: '2px',
+                    height: '9px',
+                    background: '#1f2937'
+                  }}
+                />
+              </div>
+            </div>
+            <span 
+              className="text-gray-900 font-medium"
+              style={{ fontSize: 'clamp(11px, 2.5vw, 12px)', lineHeight: '1', whiteSpace: 'nowrap' }}
+            >
+              {mapScale.distance} {mapScale.unit}
+            </span>
+          </div>
+        </div>
+      </div>
+      
       <InfoContainer regionInfo={regionInfo} onClose={clearSelection} />
     </div>
   );
