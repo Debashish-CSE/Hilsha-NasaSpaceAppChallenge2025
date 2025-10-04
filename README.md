@@ -1,6 +1,7 @@
 # Better Blocks - Urban Planning Assistant
 
 A web-based urban planning tool that uses NASA satellite data and OpenStreetMap to analyze infrastructure readiness and population distribution. Built for NASA Space Apps Challenge 2025.
+About: https://youtu.be/7YuUUKEz9bA?si=I82Ki6zJBUpdODzy
 
 ## What it does
 
