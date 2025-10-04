@@ -24,4 +24,4 @@ dist-ssr
 *.sw?
 
 # Large data files
-public/data/global_pop_2025_CN_1km_R2025A_UA_v1.tif
+public/data/*.tif

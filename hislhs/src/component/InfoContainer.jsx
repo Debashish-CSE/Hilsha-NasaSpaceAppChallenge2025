@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, ChevronDown, ChevronUp, MapPin, Building2, Shield, Flame, Users, TrendingUp, School, Trees, Activity, AlertCircle } from 'lucide-react';
-import * as GeoTIFF from 'geotiff';
+import Papa from 'papaparse';
 
 function InfoContainer({ regionInfo, onClose }) {
     const [isExpanded, setIsExpanded] = useState(true);
@@ -26,60 +26,51 @@ function InfoContainer({ regionInfo, onClose }) {
     const fetchPopulationData = async (bbox) => {
         try {
             const [minLat, minLng, maxLat, maxLng] = bbox.split(',').map(Number);
-            const response = await fetch('/data/bgd_pop_2025_CN_100m_R2025A_v1.tif');
-            const arrayBuffer = await response.arrayBuffer();
-            const tiff = await GeoTIFF.fromArrayBuffer(arrayBuffer);
-            const image = await tiff.getImage();
-            const bbox_array = image.getBoundingBox();
-            const resolution = image.getResolution();
-            const [geoMinX, geoMinY, geoMaxX, geoMaxY] = bbox_array;
-            const width = image.getWidth();
-            const height = image.getHeight();
-            const pixelMinX = Math.floor((minLng - geoMinX) / resolution[0]);
-            const pixelMaxX = Math.ceil((maxLng - geoMinX) / resolution[0]);
-            const pixelMinY = Math.floor((geoMaxY - maxLat) / Math.abs(resolution[1]));
-            const pixelMaxY = Math.ceil((geoMaxY - minLat) / Math.abs(resolution[1]));
-            const clampedMinX = Math.max(0, pixelMinX);
-            const clampedMaxX = Math.min(width, pixelMaxX);
-            const clampedMinY = Math.max(0, pixelMinY);
-            const clampedMaxY = Math.min(height, pixelMaxY);
-            const windowWidth = clampedMaxX - clampedMinX;
-            const windowHeight = clampedMaxY - clampedMinY;
             
-            if (windowWidth <= 0 || windowHeight <= 0) {
-                setPopulationData(null);
-                return;
-            }
-            
-            const rasterData = await image.readRasters({
-                window: [clampedMinX, clampedMinY, clampedMaxX, clampedMaxY]
-            });
-            const populationBand = rasterData[0];
-            let totalPopulation = 0;
-            let gridCellCount = 0;
-            
-            for (let i = 0; i < populationBand.length; i++) {
-                const value = populationBand[i];
-                if (value > 0 && value < 1e10) {
-                    totalPopulation += value;
-                    gridCellCount++;
+            Papa.parse('/data/bgd_pd_2020_1km_UNadj_ASCII_XYZ.csv', {
+                download: true,
+                header: true,
+                dynamicTyping: true,
+                complete: (results) => {
+                    const data = results.data;
+                    let totalPopulation = 0;
+                    let gridCellCount = 0;
+                    
+                    data.forEach(row => {
+                        if (row.X && row.Y && row.Z) {
+                            const lat = row.Y;
+                            const lng = row.X;
+                            const population = row.Z;
+                            
+                            if (lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng) {
+                                if (population > 0) {
+                                    totalPopulation += population;
+                                    gridCellCount++;
+                                }
+                            }
+                        }
+                    });
+                    
+                    const growthRate = 2.5;
+                    
+                    setPopulationData({
+                        current: Math.round(totalPopulation),
+                        growthRate: growthRate,
+                        projected5Year: Math.round(totalPopulation * Math.pow(1 + growthRate/100, 5)),
+                        projected10Year: Math.round(totalPopulation * Math.pow(1 + growthRate/100, 10)),
+                        baseYear: 2020,
+                        gridCells: gridCellCount,
+                        source: 'Bangladesh Population 2020 (1km resolution)'
+                    });
+                },
+                error: (error) => {
+                    console.error('Error parsing CSV:', error);
+                    setPopulationData(null);
                 }
-            }
-            
-            const growthRate = 2.5;
-            
-            setPopulationData({
-                current: Math.round(totalPopulation),
-                growthRate: growthRate,
-                projected5Year: Math.round(totalPopulation * Math.pow(1 + growthRate/100, 5)),
-                projected10Year: Math.round(totalPopulation * Math.pow(1 + growthRate/100, 10)),
-                baseYear: 2025,
-                gridCells: gridCellCount,
-                source: 'Bangladesh Population 2025 (100m resolution)'
             });
             
         } catch (error) {
-            console.error('Error fetching GeoTIFF population data:', error);
+            console.error('Error fetching population data:', error);
             setPopulationData(null);
         }
     };
@@ -547,7 +538,7 @@ function InfoContainer({ regionInfo, onClose }) {
                                                 }}
                                             >
                                                 {populationData.source ? (
-                                                    <>{populationData.gridCells} grid cells at 1km resolution • {populationData.baseYear} base year • 2.5% annual growth</>
+                                                    <>{populationData.gridCells} grid cells at 100m resolution • {populationData.baseYear} base year • 2.5% annual growth</>
                                                 ) : (
                                                     <>2,500 people/km² • 2.5% annual growth</>
                                                 )}

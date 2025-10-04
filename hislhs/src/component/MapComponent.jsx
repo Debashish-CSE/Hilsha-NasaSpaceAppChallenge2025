@@ -352,7 +352,7 @@ const MapComponent = () => {
                   marginBottom: '16px'
                 }}
               >
-                Global satellite population data at 1km resolution.
+                Bangladesh satellite population data at 1km resolution.
               </p>
               <div style={{ marginBottom: '16px' }}>
                 <h5 
@@ -384,7 +384,7 @@ const MapComponent = () => {
                       className="text-gray-700" 
                       style={{ fontSize: '12px', lineHeight: '18px' }}
                     >
-                      <strong>Population:</strong> Global 2025 (1km)
+                      <strong>Population:</strong> Bangladesh 2020 (1km)
                     </p>
                   </div>
                   <div 
@@ -441,7 +441,7 @@ const MapComponent = () => {
                     fontWeight: 500
                   }}
                 >
-                  🌍 Global coverage available
+                  �🇩 Bangladesh coverage only
                 </p>
               </div>
             </div>
