@@ -26,7 +26,7 @@ function InfoContainer({ regionInfo, onClose }) {
     const fetchPopulationData = async (bbox) => {
         try {
             const [minLat, minLng, maxLat, maxLng] = bbox.split(',').map(Number);
-            const response = await fetch('/data/global_pop_2025_CN_1km_R2025A_UA_v1.tif');
+            const response = await fetch('/data/bgd_pop_2025_CN_100m_R2025A_v1.tif');
             const arrayBuffer = await response.arrayBuffer();
             const tiff = await GeoTIFF.fromArrayBuffer(arrayBuffer);
             const image = await tiff.getImage();
@@ -75,7 +75,7 @@ function InfoContainer({ regionInfo, onClose }) {
                 projected10Year: Math.round(totalPopulation * Math.pow(1 + growthRate/100, 10)),
                 baseYear: 2025,
                 gridCells: gridCellCount,
-                source: 'Global Population 2025 (1km resolution)'
+                source: 'Bangladesh Population 2025 (100m resolution)'
             });
             
         } catch (error) {
