@@ -199,10 +199,6 @@ const MapComponent = () => {
       latDiff: latDiff.toFixed(6),
       lngDiff: lngDiff.toFixed(6),
     });
-    console.log('Selected Region:', {
-      bounds,
-      center: [centerLat, centerLng],
-    });
     setIsDrawMode(false);
   };
 
@@ -356,7 +352,7 @@ const MapComponent = () => {
                   marginBottom: '16px'
                 }}
               >
-                NASA satellite data available for <strong className="text-gray-900">Bangladesh region</strong> only.
+                Global satellite population data at 1km resolution.
               </p>
               <div style={{ marginBottom: '16px' }}>
                 <h5 
@@ -388,7 +384,7 @@ const MapComponent = () => {
                       className="text-gray-700" 
                       style={{ fontSize: '12px', lineHeight: '18px' }}
                     >
-                      <strong>WorldPop 2020</strong> - 1km population density
+                      <strong>Population:</strong> Global 2025 (1km)
                     </p>
                   </div>
                   <div 
@@ -408,7 +404,7 @@ const MapComponent = () => {
                       className="text-gray-700" 
                       style={{ fontSize: '12px', lineHeight: '18px' }}
                     >
-                      <strong>OpenStreetMap</strong> - Infrastructure data
+                      <strong>Infrastructure:</strong> OpenStreetMap
                     </p>
                   </div>
                   <div 
@@ -428,7 +424,7 @@ const MapComponent = () => {
                       className="text-gray-700" 
                       style={{ fontSize: '12px', lineHeight: '18px' }}
                     >
-                      <strong>Growth Model</strong> - 2.5% annual rate
+                      <strong>Growth:</strong> 2.5% annually
                     </p>
                   </div>
                 </div>
@@ -445,8 +441,7 @@ const MapComponent = () => {
                     fontWeight: 500
                   }}
                 >
-                  <span style={{ fontSize: '13px', marginRight: '4px' }}>ℹ️</span>
-                  Draw regions within Bangladesh for accurate analysis
+                  🌍 Global coverage available
                 </p>
               </div>
             </div>

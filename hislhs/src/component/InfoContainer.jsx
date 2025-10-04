@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, ChevronDown, ChevronUp, MapPin, Building2, Shield, Flame, Users, TrendingUp, School, Trees, Activity, AlertCircle } from 'lucide-react';
-import Papa from 'papaparse';
+import * as GeoTIFF from 'geotiff';
 
 function InfoContainer({ regionInfo, onClose }) {
     const [isExpanded, setIsExpanded] = useState(true);
@@ -26,48 +26,60 @@ function InfoContainer({ regionInfo, onClose }) {
     const fetchPopulationData = async (bbox) => {
         try {
             const [minLat, minLng, maxLat, maxLng] = bbox.split(',').map(Number);
-            const response = await fetch('/data/bgd_pd_2020_1km_UNadj_ASCII_XYZ/bgd_pd_2020_1km_UNadj_ASCII_XYZ.csv');
-            const csvText = await response.text();
+            const response = await fetch('/data/global_pop_2025_CN_1km_R2025A_UA_v1.tif');
+            const arrayBuffer = await response.arrayBuffer();
+            const tiff = await GeoTIFF.fromArrayBuffer(arrayBuffer);
+            const image = await tiff.getImage();
+            const bbox_array = image.getBoundingBox();
+            const resolution = image.getResolution();
+            const [geoMinX, geoMinY, geoMaxX, geoMaxY] = bbox_array;
+            const width = image.getWidth();
+            const height = image.getHeight();
+            const pixelMinX = Math.floor((minLng - geoMinX) / resolution[0]);
+            const pixelMaxX = Math.ceil((maxLng - geoMinX) / resolution[0]);
+            const pixelMinY = Math.floor((geoMaxY - maxLat) / Math.abs(resolution[1]));
+            const pixelMaxY = Math.ceil((geoMaxY - minLat) / Math.abs(resolution[1]));
+            const clampedMinX = Math.max(0, pixelMinX);
+            const clampedMaxX = Math.min(width, pixelMaxX);
+            const clampedMinY = Math.max(0, pixelMinY);
+            const clampedMaxY = Math.min(height, pixelMaxY);
+            const windowWidth = clampedMaxX - clampedMinX;
+            const windowHeight = clampedMaxY - clampedMinY;
             
-            Papa.parse(csvText, {
-                header: true,
-                dynamicTyping: true,
-                skipEmptyLines: true,
-                complete: (results) => {
-                    let totalPopulation = 0;
-                    let gridCellCount = 0;
-                    results.data.forEach(row => {
-                        const lng = row.X;
-                        const lat = row.Y;
-                        const population = row.Z;
-                        if (lng >= minLng && lng <= maxLng && lat >= minLat && lat <= maxLat) {
-                            totalPopulation += population;
-                            gridCellCount++;
-                        }
-                    });
-                    
-                    console.log(`Found ${gridCellCount} grid cells with total population: ${totalPopulation}`);
-                    const growthRate = 2.5;
-                    const yearsSince2020 = new Date().getFullYear() - 2020;
-                    const currentPopulation = Math.round(totalPopulation * Math.pow(1 + growthRate/100, yearsSince2020));
-                    
-                    setPopulationData({
-                        current: currentPopulation,
-                        growthRate: growthRate,
-                        projected5Year: Math.round(currentPopulation * Math.pow(1 + growthRate/100, 5)),
-                        projected10Year: Math.round(currentPopulation * Math.pow(1 + growthRate/100, 10)),
-                        baseYear: 2020,
-                        gridCells: gridCellCount,
-                        source: 'NASA WorldPop Bangladesh 2020'
-                    });
-                },
-                error: (error) => {
-                    console.error('Error parsing population CSV:', error);
-                    setPopulationData(null);
-                }
+            if (windowWidth <= 0 || windowHeight <= 0) {
+                setPopulationData(null);
+                return;
+            }
+            
+            const rasterData = await image.readRasters({
+                window: [clampedMinX, clampedMinY, clampedMaxX, clampedMaxY]
             });
+            const populationBand = rasterData[0];
+            let totalPopulation = 0;
+            let gridCellCount = 0;
+            
+            for (let i = 0; i < populationBand.length; i++) {
+                const value = populationBand[i];
+                if (value > 0 && value < 1e10) {
+                    totalPopulation += value;
+                    gridCellCount++;
+                }
+            }
+            
+            const growthRate = 2.5;
+            
+            setPopulationData({
+                current: Math.round(totalPopulation),
+                growthRate: growthRate,
+                projected5Year: Math.round(totalPopulation * Math.pow(1 + growthRate/100, 5)),
+                projected10Year: Math.round(totalPopulation * Math.pow(1 + growthRate/100, 10)),
+                baseYear: 2025,
+                gridCells: gridCellCount,
+                source: 'Global Population 2025 (1km resolution)'
+            });
+            
         } catch (error) {
-            console.error('Error fetching population data:', error);
+            console.error('Error fetching GeoTIFF population data:', error);
             setPopulationData(null);
         }
     };
@@ -79,7 +91,6 @@ function InfoContainer({ regionInfo, onClose }) {
             try {
                 const [[lat1, lng1], [lat2, lng2]] = regionInfo.bounds;
                 const bbox = `${Math.min(lat1, lat2)},${Math.min(lng1, lng2)},${Math.max(lat1, lat2)},${Math.max(lng1, lng2)}`;
-                console.log('Fetching amenities for bbox:', bbox);
                 const query = `
                     [out:json][timeout:25];
                     (
@@ -109,7 +120,6 @@ function InfoContainer({ regionInfo, onClose }) {
                 });
                 if (!response.ok) throw new Error('Failed to fetch amenities');
                 const data = await response.json();
-                console.log('Overpass API response:', data);
                 const counts = {
                     hospitals: 0,
                     police: 0,
@@ -134,7 +144,6 @@ function InfoContainer({ regionInfo, onClose }) {
                     });
                 }
 
-                console.log('Amenity counts:', counts);
                 setAmenities(counts);
                 await fetchPopulationData(bbox);
 
@@ -212,7 +221,7 @@ function InfoContainer({ regionInfo, onClose }) {
                                     marginBottom: 'clamp(4px, 1vw, 6px)'
                                 }}
                             >
-                                Urban Planning Analysis
+                                Region Analysis
                             </h3>
                             <p 
                                 className="text-gray-600" 
@@ -273,7 +282,7 @@ function InfoContainer({ regionInfo, onClose }) {
                                         className="text-gray-600 font-medium" 
                                         style={{ marginLeft: '16px', fontSize: '14px' }}
                                     >
-                                        Analyzing region data...
+                                        Loading data...
                                     </p>
                                 </div>
                             ) : (
@@ -292,13 +301,13 @@ function InfoContainer({ regionInfo, onClose }) {
                                                     className="font-medium text-gray-700" 
                                                     style={{ fontSize: '13px', marginBottom: '4px', letterSpacing: '0.3px' }}
                                                 >
-                                                    INFRASTRUCTURE READINESS
+                                                    INFRASTRUCTURE SCORE
                                                 </p>
                                                 <p 
                                                     className="text-gray-600" 
                                                     style={{ fontSize: '12px', lineHeight: '16px' }}
                                                 >
-                                                    Based on facility density and urban planning standards
+                                                    Facility density per 10 km²
                                                 </p>
                                             </div>
                                             <div className="flex items-center" style={{ gap: 'clamp(8px, 2vw, 12px)' }}>
@@ -326,7 +335,7 @@ function InfoContainer({ regionInfo, onClose }) {
                                                 letterSpacing: '-0.01em'
                                             }}
                                         >
-                                            Essential Facilities
+                                            Infrastructure
                                         </h4>
                                         <div 
                                             className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5" 
@@ -363,7 +372,7 @@ function InfoContainer({ regionInfo, onClose }) {
                                                     className="text-gray-500" 
                                                     style={{ fontSize: '11px', lineHeight: '14px' }}
                                                 >
-                                                    Hospitals & Clinics
+                                                    Facilities
                                                 </p>
                                             </div>
                                             <div 
@@ -397,7 +406,7 @@ function InfoContainer({ regionInfo, onClose }) {
                                                     className="text-gray-500" 
                                                     style={{ fontSize: '11px', lineHeight: '14px' }}
                                                 >
-                                                    Safety Facilities
+                                                    Stations
                                                 </p>
                                             </div>
                                             <div 
@@ -431,7 +440,7 @@ function InfoContainer({ regionInfo, onClose }) {
                                                     className="text-gray-500" 
                                                     style={{ fontSize: '11px', lineHeight: '14px' }}
                                                 >
-                                                    Emergency Services
+                                                    Stations
                                                 </p>
                                             </div>
                                             <div 
@@ -499,7 +508,7 @@ function InfoContainer({ regionInfo, onClose }) {
                                                     className="text-gray-500" 
                                                     style={{ fontSize: '11px', lineHeight: '14px' }}
                                                 >
-                                                    Green Spaces
+                                                    Total
                                                 </p>
                                             </div>
                                         </div>
@@ -514,7 +523,7 @@ function InfoContainer({ regionInfo, onClose }) {
                                                     className="font-medium text-gray-900" 
                                                     style={{ fontSize: '15px', letterSpacing: '-0.01em' }}
                                                 >
-                                                    Population Growth Projection
+                                                    Population Projections
                                                 </h4>
                                                 <div 
                                                     className="bg-blue-50 border border-blue-200 rounded-lg flex items-center" 
@@ -525,7 +534,7 @@ function InfoContainer({ regionInfo, onClose }) {
                                                         className="font-medium text-blue-900" 
                                                         style={{ fontSize: '11px', letterSpacing: '0.2px' }}
                                                     >
-                                                        NASA WorldPop 2020 Data
+                                                        {populationData.source || 'Global 2025 Data'}
                                                     </span>
                                                 </div>
                                             </div>
@@ -538,9 +547,9 @@ function InfoContainer({ regionInfo, onClose }) {
                                                 }}
                                             >
                                                 {populationData.source ? (
-                                                    <>Satellite-derived data from <strong>{populationData.gridCells} grid cells</strong> at 1km resolution. Adjusted for <strong>{new Date().getFullYear() - populationData.baseYear} years</strong> of growth at <strong>2.5% annually</strong>.</>
+                                                    <>{populationData.gridCells} grid cells at 1km resolution • {populationData.baseYear} base year • 2.5% annual growth</>
                                                 ) : (
-                                                    <>Estimated using <strong>2,500 people/km²</strong> urban density with <strong>2.5% annual growth</strong> (UN methodology)</>
+                                                    <>2,500 people/km² • 2.5% annual growth</>
                                                 )}
                                             </p>
                                             <div 
@@ -573,7 +582,7 @@ function InfoContainer({ regionInfo, onClose }) {
                                                         className="text-blue-700" 
                                                         style={{ fontSize: '11px', lineHeight: '16px' }}
                                                     >
-                                                        {populationData.source ? `${populationData.gridCells} grid cells • ${populationData.baseYear} base year` : `Based on ${calculateArea()} km² area`}
+                                                        {populationData.source ? `${populationData.gridCells} cells • ${populationData.baseYear}` : `${calculateArea()} km²`}
                                                     </p>
                                                 </div>
                                                 <div 
@@ -631,7 +640,7 @@ function InfoContainer({ regionInfo, onClose }) {
                                                         className="text-orange-700" 
                                                         style={{ fontSize: '11px', lineHeight: '16px' }}
                                                     >
-                                                        {populationData.growthRate}% annual growth rate
+                                                        {populationData.growthRate}% annual rate
                                                     </p>
                                                 </div>
                                             </div>
